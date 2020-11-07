@@ -136,7 +136,7 @@ func (r *Remote) AcquireSector(ctx context.Context, s abi.SectorID, ssize abi.Se
 
 		url, err := r.acquireFromRemote(ctx, s, fileType, dest)
 		if err != nil {
-			return SectorPaths{}, SectorPaths{}, err
+			//return SectorPaths{}, SectorPaths{}, err // snake del
 		}
 
 		SetPathByType(&paths, fileType, dest)
