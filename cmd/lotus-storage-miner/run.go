@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/lib/snakestar"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -22,7 +23,6 @@ import (
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/api/apistruct"
-	"github.com/filecoin-project/lotus/build"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/lib/ulimit"
 	"github.com/filecoin-project/lotus/metrics"
@@ -54,6 +54,22 @@ var runCmd = &cli.Command{
 			Usage: "manage open file limit",
 			Value: true,
 		},
+		/* snake begin */
+		&cli.BoolFlag{
+			Name:  "pledge-sector",
+			Usage: "pledge-sector",
+		},
+		&cli.StringFlag{
+			Name:  "staged-sector",
+			Usage: "specify the name of staged-sector, not path",
+			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "commp-cache",
+			Usage: "specify the name of commp-cache, not path",
+			Value: "",
+		},
+		/* snake end */
 	},
 	Action: func(cctx *cli.Context) error {
 		if !cctx.Bool("enable-gpu-proving") {
@@ -62,6 +78,8 @@ var runCmd = &cli.Command{
 				return err
 			}
 		}
+
+		initCmdFlag(cctx) // snake add
 
 		nodeApi, ncloser, err := lcli.GetFullNodeAPI(cctx)
 		if err != nil {
@@ -88,9 +106,9 @@ var runCmd = &cli.Command{
 			}
 		}
 
-		if v.APIVersion != build.FullAPIVersion {
-			return xerrors.Errorf("lotus-daemon API version doesn't match: expected: %s", api.Version{APIVersion: build.FullAPIVersion})
-		}
+		//if v.APIVersion != build.FullAPIVersion {
+		//	return xerrors.Errorf("lotus-daemon API version doesn't match: expected: %s", api.Version{APIVersion: build.FullAPIVersion})
+		//} // snake del
 
 		log.Info("Checking full node sync status")
 
@@ -200,3 +218,23 @@ var runCmd = &cli.Command{
 		return srv.Serve(manet.NetListener(lst))
 	},
 }
+
+/* snake begin */
+func initCmdFlag(cctx *cli.Context) error {
+	if cctx.Bool("pledge-sector") {
+		snakestar.PledgeSector = true
+	}
+
+	if cctx.Bool("pledge-sector") {
+		snakestar.StagedPath = cctx.String("staged-sector")
+		snakestar.CommpCache = cctx.String("commp-cache")
+		if snakestar.StagedPath == "" || snakestar.CommpCache == "" {
+			log.Error("staged-sector or commp-cache not provided")
+			panic("staged-sector or commp-cache not provided")
+		}
+	}
+
+	return nil
+}
+
+/* snake end */

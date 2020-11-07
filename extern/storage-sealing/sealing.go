@@ -87,6 +87,8 @@ type Sealing struct {
 	stats SectorStats
 
 	getConfig GetSealingConfigFunc
+
+	pledgeSectorsLock sync.Mutex // snake add
 }
 
 type FeeConfig struct {

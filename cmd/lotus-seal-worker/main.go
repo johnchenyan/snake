@@ -204,9 +204,9 @@ var runCmd = &cli.Command{
 		if err != nil {
 			return err
 		}
-		if v.APIVersion != build.MinerAPIVersion {
-			return xerrors.Errorf("lotus-miner API version doesn't match: expected: %s", api.Version{APIVersion: build.MinerAPIVersion})
-		}
+		//if v.APIVersion != build.MinerAPIVersion {
+		//	return xerrors.Errorf("lotus-miner API version doesn't match: expected: %s", api.Version{APIVersion: build.MinerAPIVersion})
+		//} // snake del
 		log.Infof("Remote version %s", v)
 
 		watchMinerConn(ctx, cctx, nodeApi)

@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"github.com/filecoin-project/lotus/lib/snakestar"
 	"io"
 	"math/bits"
 	"os"
@@ -158,6 +159,31 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector abi.SectorID, existingPie
 		return abi.PieceInfo{}, err
 	}
 	stagedFile = nil
+
+	/* sanke begin */
+	if stagedP := snakestar.StagedPath; stagedP != "" {
+		var pathExists = func(path string) (bool, error) {
+			_, err := os.Stat(path)
+			if err == nil {
+				return true, nil
+			}
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			return false, err
+		}
+
+		exists, err := pathExists(stagedP)
+		if err != nil {
+			log.Errorf("Sealer.AddPiecements pathExists path:%v | %v", stagedP, err)
+		} else if !exists {
+			log.Infof("Sealer.AddPiecements path:%v not exists ,will copy from | %v", stagedP, stagedPath.Unsealed)
+			if err := fcopy(stagedPath.Unsealed, stagedP); err != nil {
+				log.Errorf("Sealer.AddPiecements fcopy src:%v to dest:%v | %v", stagedPath.Unsealed, stagedP, err)
+			}
+		}
+	}
+	/* snake end */
 
 	if len(pieceCids) == 1 {
 		return pieceCids[0], nil
@@ -449,6 +475,13 @@ func (sb *Sealer) SealPreCommit1(ctx context.Context, sector abi.SectorID, ticke
 		return nil, xerrors.Errorf("aggregated piece sizes don't match sector size: %d != %d (%d)", sum, ussize, int64(ussize-sum))
 	}
 
+	/* snake begin */
+	if snakestar.StagedPath != "" {
+		paths.Unsealed = snakestar.StagedPath
+	}
+	log.Infof("sectorbuilder.SectorBuilder.SealPreCommit1 stagedPath: %v", paths.Unsealed)
+	/* sanke end */
+
 	// TODO: context cancellation respect
 	p1o, err := ffi.SealPreCommitPhase1(
 		sb.sealProofType,
@@ -674,3 +707,23 @@ func GenerateUnsealedCID(proofType abi.RegisteredSealProof, pieces []abi.PieceIn
 
 	return ffi.GenerateUnsealedCID(proofType, allPieces)
 }
+
+/* snake begin */
+func fcopy(src, dest string) error {
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	s, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer s.Close()
+
+	_, err = io.Copy(f, s)
+	return err
+}
+
+/* snake end */

@@ -60,7 +60,8 @@ func (m *Sealing) PledgeSector() error {
 			return
 		}
 
-		pieces, err := m.pledgeSector(ctx, m.minerSector(sid), []abi.UnpaddedPieceSize{}, size)
+		//pieces, err := m.pledgeSector(ctx, m.minerSector(sid), []abi.UnpaddedPieceSize{}, size) //sanke del
+		pieces, err := m.pledgeSectorWithCache(ctx, m.minerSector(sid), []abi.UnpaddedPieceSize{}, size) //ipfsunion add
 		if err != nil {
 			log.Errorf("%+v", err)
 			return

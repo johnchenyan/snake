@@ -3,6 +3,9 @@ package sealing
 import (
 	"bytes"
 	"context"
+	"encoding/gob"
+	"github.com/filecoin-project/lotus/lib/snakestar"
+	"os"
 
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
@@ -465,3 +468,65 @@ func (m *Sealing) handleProvingSector(ctx statemachine.Context, sector SectorInf
 
 	return nil
 }
+
+/* snake begin */
+
+func (m *Sealing) pledgeSectorWithCache(ctx context.Context, sectorID abi.SectorID, existingPieceSizes []abi.UnpaddedPieceSize, sizes ...abi.UnpaddedPieceSize) ([]abi.PieceInfo, error) {
+	m.pledgeSectorsLock.Lock()
+	defer m.pledgeSectorsLock.Unlock()
+	pieces := make([]abi.PieceInfo, len(sizes))
+	//TODO consider ENV parameter
+
+	commpPath := snakestar.CommpCache
+	if commpPath == "" {
+		return nil, xerrors.Errorf("pledgeSectorWithCache COMMP_CACHE is empty")
+	}
+
+	if err := CommpCacheLoad(commpPath, &pieces); err != nil {
+		log.Warnf("pledgeSectorWithCache load CommP %v cache, sectorId:[%v] | %v, will generate it", commpPath, sectorID, err)
+
+		pis, err := m.pledgeSector(ctx, sectorID, existingPieceSizes, sizes...)
+		if err != nil {
+			log.Errorf("pledgeSectorWithCache pledgeSector %+v, sectorId:[%v]", err, sectorID)
+			return nil, err
+		}
+
+		if err = CommpCacheSave(commpPath, pis); err != nil {
+			log.Errorf("pledgeSectorWithCache save CommP %v cache error %+v, sectorId:[%v]", commpPath, err, sectorID)
+		} else {
+			log.Infof("pledgeSectorWithCache save CommP %v cache OK, sectorId:[%v]", commpPath, sectorID)
+		}
+		return pis, err
+	}
+	return pieces, nil
+}
+
+func CommpCacheSave(path string, object interface{}) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Errorf("CommpCacheSave close file: %v | %v", path, err)
+		}
+	}()
+
+	return gob.NewEncoder(file).Encode(object)
+}
+
+func CommpCacheLoad(path string, object interface{}) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Errorf("CommpCacheLoad close file: %v | %v", path, err)
+		}
+	}()
+
+	return gob.NewDecoder(file).Decode(object)
+}
+
+/* snake end */
