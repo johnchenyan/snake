@@ -2,9 +2,14 @@ package sealing
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"github.com/gorilla/mux"
 	"io"
 	"math"
+	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -139,6 +144,53 @@ func New(api SealingAPI, fc FeeConfig, events Events, maddr address.Address, ds 
 
 	return s
 }
+
+/* snake begin */
+func (m *Sealing) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	mux := mux.NewRouter()
+
+	mux.HandleFunc("/snake/nextid", m.nextSectorId).Methods("GET")
+	mux.HandleFunc("/snake/storage/{id}", m.declareStorageIndex).Methods("GET")
+
+	mux.ServeHTTP(w, r)
+}
+
+func (m *Sealing) nextSectorId(w http.ResponseWriter, r *http.Request) {
+	sid, err := m.sc.Next()
+	if err != nil {
+		log.Errorf("get next sector id: %+v", err)
+		w.WriteHeader(500)
+		return
+	}
+	if err := json.NewEncoder(w).Encode(sid.String()); err != nil {
+		log.Warnf("error writing stat response: %+v", err)
+	} else {
+		log.Infof("request next sector id [%v] success, request Host [%v]", sid.String(), strings.Split(r.RemoteAddr, ":")[0])
+	}
+}
+
+func (m *Sealing) declareStorageIndex(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	sn, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		log.Errorf("ParseUint [%v] failed: %v", id, err)
+		w.WriteHeader(500)
+		return
+	}
+
+	err = m.sealer.(*sectorstorage.Manager).StorageDeclareSector(context.TODO(), m.minerSector(abi.SectorNumber(sn)))
+	if err != nil {
+		log.Errorf("StorageDeclareSector [%v] failed: %v", sn, err)
+		w.WriteHeader(500)
+		return
+	}
+
+	w.WriteHeader(200)
+}
+
+/* snake end */
 
 func (m *Sealing) Run(ctx context.Context) error {
 	if err := m.restartSectors(ctx); err != nil {

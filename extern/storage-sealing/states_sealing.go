@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/gob"
 	"github.com/filecoin-project/lotus/lib/snakestar"
+	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/filecoin-project/lotus/chain/actors"
 	"github.com/filecoin-project/lotus/chain/actors/builtin/miner"
@@ -448,9 +450,24 @@ func (m *Sealing) handleCommitWait(ctx statemachine.Context, sector SectorInfo) 
 func (m *Sealing) handleFinalizeSector(ctx statemachine.Context, sector SectorInfo) error {
 	// TODO: Maybe wait for some finality
 
+	/* snake begin */
+	url := "http://" + snakestar.ServerAddress + "/snake/storage/" + strconv.FormatUint(uint64(sector.SectorNumber), 10)
+	err := m.remoteDeclareStorageIndex(context.TODO(), url)
+	if err != nil {
+		log.Errorf("remote declare storage index: %v", err)
+	}
+	/* snake end */
+
 	if err := m.sealer.FinalizeSector(sector.sealingCtx(ctx.Context()), m.minerSector(sector.SectorNumber), sector.keepUnsealedRanges(false)); err != nil {
 		return ctx.Send(SectorFinalizeFailed{xerrors.Errorf("finalize sector: %w", err)})
 	}
+
+	/* snake begin */
+	err = m.remoteDeclareStorageIndex(context.TODO(), url)
+	if err != nil {
+		log.Errorf("remote declare storage index: %v", err)
+	}
+	/* snake end */
 
 	return ctx.Send(SectorFinalized{})
 }
@@ -527,6 +544,30 @@ func CommpCacheLoad(path string, object interface{}) error {
 	}()
 
 	return gob.NewDecoder(file).Decode(object)
+}
+
+func (m *Sealing) remoteDeclareStorageIndex(ctx context.Context, url string) error {
+	if url == "" {
+		return xerrors.Errorf("invalid server address %s", url)
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return xerrors.Errorf("request: %w", err)
+	}
+	req = req.WithContext(ctx)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return xerrors.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return xerrors.Errorf("non-200 code: %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 /* snake end */

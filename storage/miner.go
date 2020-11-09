@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"errors"
+	"github.com/filecoin-project/lotus/lib/snakestar"
+	"net/http"
 	"time"
 
 	"github.com/filecoin-project/go-state-types/network"
@@ -131,6 +133,13 @@ func NewMiner(api storageMinerApi, maddr, worker address.Address, h host.Host, d
 	return m, nil
 }
 
+/* snake begin */
+func (m *Miner) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.sealing.ServeHTTP(w, r)
+}
+
+/* snake end */
+
 func (m *Miner) Run(ctx context.Context) error {
 	if err := m.runPreflightChecks(ctx); err != nil {
 		return xerrors.Errorf("miner preflight checks failed: %w", err)
@@ -151,6 +160,13 @@ func (m *Miner) Run(ctx context.Context) error {
 	// TODO: Maybe we update this policy after actor upgrades?
 	pcp := sealing.NewBasicPreCommitPolicy(adaptedAPI, policy.GetMaxSectorExpirationExtension()-(md.WPoStProvingPeriod*2), md.PeriodStart%md.WPoStProvingPeriod)
 	m.sealing = sealing.New(adaptedAPI, fc, NewEventsAdapter(evts), m.maddr, m.ds, m.sealer, m.sc, m.verif, &pcp, sealing.GetSealingConfigFunc(m.getSealConfig), m.handleSealingNotifications)
+
+	/* snake begin */
+	if !snakestar.PledgeSector {
+		log.Infof("skip sealing task")
+		return nil
+	}
+	/* snake end */
 
 	go m.sealing.Run(ctx) //nolint:errcheck // logged intside the function
 

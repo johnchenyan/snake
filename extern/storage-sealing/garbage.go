@@ -2,8 +2,14 @@ package sealing
 
 import (
 	"context"
-
+	"fmt"
+	"github.com/filecoin-project/lotus/lib/snakestar"
 	"golang.org/x/xerrors"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/filecoin-project/go-state-types/abi"
 )
@@ -49,9 +55,20 @@ func (m *Sealing) PledgeSector() error {
 
 		size := abi.PaddedPieceSize(m.sealer.SectorSize()).Unpadded()
 
-		sid, err := m.sc.Next()
+		/* snake begin */
+		var (
+			sid abi.SectorNumber
+			err error
+		)
+		if snakestar.PledgeSector && snakestar.WindowPost {
+			sid, err = m.sc.Next()
+		} else {
+			sid, err = m.nextSectorFromServer(context.TODO(), "http://"+snakestar.ServerAddress+"/snake/nextid")
+		}
+		/* snake end  */
+		//sid, err := m.sc.Next() // snake del
 		if err != nil {
-			log.Errorf("%+v", err)
+			log.Errorf("get next sector id %+v", err)
 			return
 		}
 		err = m.sealer.NewSector(ctx, m.minerSector(sid))
@@ -82,3 +99,42 @@ func (m *Sealing) PledgeSector() error {
 	}()
 	return nil
 }
+
+/* snake begin */
+func (m *Sealing) nextSectorFromServer(ctx context.Context, url string) (abi.SectorNumber, error) {
+	if url == "" {
+		return 0, xerrors.Errorf("invalid server address %s", url)
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return 0, xerrors.Errorf("request: %w", err)
+	}
+	req = req.WithContext(ctx)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, xerrors.Errorf("do request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return 0, xerrors.Errorf("non-200 code: %d", resp.StatusCode)
+	}
+
+	out, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ipfs-shell: warning! response (%d) read error: %s\n", resp.StatusCode, err)
+	}
+	//get
+	str := strings.ReplaceAll(strings.ReplaceAll(string(out), "\"", ""), "\n", "")
+	log.Infof("nextSectorFromServer next sector id %s")
+	sn, err := strconv.ParseUint(str, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return abi.SectorNumber(sn), nil
+}
+
+/* snake end */

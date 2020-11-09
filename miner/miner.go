@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"github.com/filecoin-project/lotus/lib/snakestar"
 	"sync"
 	"time"
 
@@ -109,6 +110,14 @@ func (m *Miner) Address() address.Address {
 }
 
 func (m *Miner) Start(ctx context.Context) error {
+
+	/* snake begin */
+	if !snakestar.WinningPost {
+		log.Infof("skip WinningPost")
+		return nil
+	}
+	/* snake end */
+
 	m.lk.Lock()
 	defer m.lk.Unlock()
 	if m.stop != nil {

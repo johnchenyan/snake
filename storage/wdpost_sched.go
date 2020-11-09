@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/lib/snakestar"
 	"time"
 
 	"golang.org/x/xerrors"
@@ -78,6 +79,14 @@ type changeHandlerAPIImpl struct {
 }
 
 func (s *WindowPoStScheduler) Run(ctx context.Context) {
+
+	/* snake begin */
+	if !snakestar.WindowPost {
+		log.Infof("skip WindowPost")
+		return
+	}
+	/* snake end */
+
 	// Initialize change handler
 	chImpl := &changeHandlerAPIImpl{storageMinerApi: s.api, WindowPoStScheduler: s}
 	s.ch = newChangeHandler(chImpl, s.actor)

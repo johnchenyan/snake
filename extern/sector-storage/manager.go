@@ -518,4 +518,25 @@ func (m *Manager) Close(ctx context.Context) error {
 	return m.sched.Close(ctx)
 }
 
+/* snake add */
+func (m *Manager) StorageDeclareSector(ctx context.Context, sector abi.SectorID) error {
+	spths, err := m.localStore.Local(ctx)
+	if err != nil {
+		return err
+	}
+	var id stores.ID
+	for _, sp := range spths {
+		if sp.CanStore {
+			id = sp.ID
+			break
+		}
+	}
+	if id == "" {
+		return xerrors.Errorf("local path not exist")
+	}
+	return m.index.StorageDeclareSector(ctx, id, sector, stores.FTCache|stores.FTSealed, true)
+}
+
+/* snake end */
+
 var _ SectorManager = &Manager{}

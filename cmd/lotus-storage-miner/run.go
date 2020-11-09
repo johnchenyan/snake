@@ -2,12 +2,18 @@ package main
 
 import (
 	"context"
+	"github.com/filecoin-project/lotus/extern/sector-storage/stores"
 	"github.com/filecoin-project/lotus/lib/snakestar"
+	"github.com/google/uuid"
+	"github.com/mitchellh/go-homedir"
+	json "github.com/nikkolasg/hexjson"
+	"io/ioutil"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	mux "github.com/gorilla/mux"
@@ -59,6 +65,14 @@ var runCmd = &cli.Command{
 			Name:  "pledge-sector",
 			Usage: "pledge-sector",
 		},
+		&cli.BoolFlag{
+			Name:  "window-post",
+			Usage: "window-post",
+		},
+		&cli.BoolFlag{
+			Name:  "winning-post",
+			Usage: "winning-post",
+		},
 		&cli.StringFlag{
 			Name:  "staged-sector",
 			Usage: "specify the name of staged-sector, not path",
@@ -68,6 +82,18 @@ var runCmd = &cli.Command{
 			Name:  "commp-cache",
 			Usage: "specify the name of commp-cache, not path",
 			Value: "",
+		},
+		&cli.StringFlag{
+			Name:  "server-address",
+			Usage: "get sealing sector id from server",
+		},
+		&cli.StringFlag{
+			Name:  "seal",
+			Usage: "use path for sealing",
+		},
+		&cli.StringFlag{
+			Name:  "store",
+			Usage: "use path for long-term storage",
 		},
 		/* snake end */
 	},
@@ -151,6 +177,32 @@ var runCmd = &cli.Command{
 			return xerrors.Errorf("creating node: %w", err)
 		}
 
+		/* snake begin */
+		seal := cctx.String("seal")
+		store := cctx.String("store")
+
+		if seal != "" && store != "" && seal == store {
+			err = AttachStorage(minerapi, seal, true, true)
+			if err != nil {
+				return err
+			}
+		} else {
+			if seal != "" {
+				err = AttachStorage(minerapi, seal, true, false)
+				if err != nil {
+					return err
+				}
+			}
+
+			if store != "" {
+				err = AttachStorage(minerapi, store, false, true)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		/* snake end */
+
 		endpoint, err := r.APIEndpoint()
 		if err != nil {
 			return xerrors.Errorf("getting API endpoint: %w", err)
@@ -180,7 +232,8 @@ var runCmd = &cli.Command{
 
 		mux.Handle("/rpc/v0", rpcServer)
 		mux.PathPrefix("/remote").HandlerFunc(minerapi.(*impl.StorageMinerAPI).ServeRemote)
-		mux.PathPrefix("/").Handler(http.DefaultServeMux) // pprof
+		mux.PathPrefix("/snake").HandlerFunc(minerapi.(*impl.StorageMinerAPI).ServeSnake) // snake add
+		mux.PathPrefix("/").Handler(http.DefaultServeMux)                                 // pprof
 
 		ah := &auth.Handler{
 			Verify: minerapi.AuthVerify,
@@ -225,6 +278,13 @@ func initCmdFlag(cctx *cli.Context) error {
 		snakestar.PledgeSector = true
 	}
 
+	if cctx.Bool("winning-post") {
+		snakestar.WinningPost = true
+	}
+	if cctx.Bool("window-post") {
+		snakestar.WindowPost = true
+	}
+
 	if cctx.Bool("pledge-sector") {
 		snakestar.StagedPath = cctx.String("staged-sector")
 		snakestar.CommpCache = cctx.String("commp-cache")
@@ -234,7 +294,71 @@ func initCmdFlag(cctx *cli.Context) error {
 		}
 	}
 
+	if cctx.String("server-address") != "" {
+		snakestar.ServerAddress = cctx.String("server-address")
+	}
+
 	return nil
+}
+
+func AttachStorage(api api.StorageMiner, path string, seal bool, store bool) error {
+	p, err := homedir.Expand(path)
+	if err != nil {
+		return xerrors.Errorf("expanding path: %w", err)
+	}
+	_, err = os.Stat(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			if err := os.MkdirAll(p, 0755); err != nil {
+				if !os.IsExist(err) {
+					return err
+				}
+			}
+		}
+	} else {
+		//return nil
+	}
+
+	metaFileAreadyExised := false
+
+	_, err = os.Stat(filepath.Join(p, metaFile))
+	if !os.IsNotExist(err) {
+		if err == nil {
+			metaFileAreadyExised = true
+			//return nil
+		} else {
+			return err
+		}
+	}
+	if !metaFileAreadyExised {
+		var cfg = &stores.LocalStorageMeta{
+			ID:       stores.ID(uuid.New().String()),
+			Weight:   10,
+			CanSeal:  seal,
+			CanStore: store,
+		}
+		b, err := json.MarshalIndent(cfg, "", "  ")
+		if err != nil {
+			return xerrors.Errorf("marshaling storage config: %w", err)
+		}
+
+		if err := ioutil.WriteFile(filepath.Join(p, metaFile), b, 0644); err != nil {
+			return xerrors.Errorf("persisting storage metadata (%s): %w", filepath.Join(p, metaFile), err)
+		}
+		return api.StorageAddLocal(context.TODO(), p)
+	} else {
+		local, err := api.StorageLocal(context.TODO())
+		if err != nil {
+			return xerrors.Errorf("StorageLocal Error: %v", err)
+		} else {
+			for _, p := range local {
+				if p == path {
+					return nil
+				}
+			}
+			return api.StorageAddLocal(context.TODO(), p)
+		}
+	}
 }
 
 /* snake end */

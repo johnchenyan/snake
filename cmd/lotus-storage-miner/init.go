@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/filecoin-project/lotus/lib/snakestar"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -122,6 +123,8 @@ var initCmd = &cli.Command{
 	Action: func(cctx *cli.Context) error {
 		log.Info("Initializing lotus miner")
 
+		snakestar.WinningPost = true // snake add
+
 		sectorSizeInt, err := units.RAMInBytes(cctx.String("sector-size"))
 		if err != nil {
 			return err
@@ -217,7 +220,8 @@ var initCmd = &cli.Command{
 				}
 			}
 
-			if !cctx.Bool("no-local-storage") {
+			//if !cctx.Bool("no-local-storage") { // snake del
+			if false { // snake add
 				b, err := json.MarshalIndent(&stores.LocalStorageMeta{
 					ID:       stores.ID(uuid.New().String()),
 					Weight:   10,

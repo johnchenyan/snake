@@ -84,6 +84,13 @@ func (sm *StorageMinerAPI) ServeRemote(w http.ResponseWriter, r *http.Request) {
 	sm.StorageMgr.ServeHTTP(w, r)
 }
 
+/* snake begin */
+func (sm *StorageMinerAPI) ServeSnake(w http.ResponseWriter, r *http.Request) {
+	sm.Miner.ServeHTTP(w, r)
+}
+
+/* snke end */
+
 func (sm *StorageMinerAPI) WorkerStats(context.Context) (map[uint64]storiface.WorkerStats, error) {
 	return sm.StorageMgr.WorkerStats(), nil
 }
