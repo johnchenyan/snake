@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/filecoin-project/lotus/lib/snakestar"
 	"github.com/gorilla/mux"
 	"io"
 	"math"
@@ -393,7 +394,18 @@ func (m *Sealing) newDealSector() (abi.SectorNumber, error) {
 
 	// Now actually create a new sector
 
-	sid, err := m.sc.Next()
+	/* snake begin */
+	var (
+		sid abi.SectorNumber
+	)
+	if snakestar.PledgeSector && snakestar.WindowPost {
+		sid, err = m.sc.Next()
+	} else {
+		sid, err = m.nextSectorFromServer(context.TODO(), "http://"+snakestar.ServerAddress+"/snake/nextid")
+	}
+	/* snake end  */
+	//sid, err := m.sc.Next() // snake del
+
 	if err != nil {
 		return 0, xerrors.Errorf("getting sector number: %w", err)
 	}
