@@ -27,22 +27,22 @@ func (m *Sealing) MarkForUpgrade(id abi.SectorNumber) error {
 		return xerrors.Errorf("sector %d already marked for upgrade", id)
 	}
 
-	si, err := m.GetSectorInfo(id)
-	if err != nil {
-		return xerrors.Errorf("getting sector info: %w", err)
-	}
+	//si, err := m.GetSectorInfo(id)
+	//if err != nil {
+	//	return xerrors.Errorf("getting sector info: %w", err)
+	//}
 
-	if si.State != Proving {
-		return xerrors.Errorf("can't mark sectors not in the 'Proving' state for upgrade")
-	}
+	//if si.State != Proving {
+	//	return xerrors.Errorf("can't mark sectors not in the 'Proving' state for upgrade")
+	//}
 
-	if len(si.Pieces) != 1 {
-		return xerrors.Errorf("not a committed-capacity sector, expected 1 piece")
-	}
-
-	if si.Pieces[0].DealInfo != nil {
-		return xerrors.Errorf("not a committed-capacity sector, has deals")
-	}
+	//if len(si.Pieces) != 1 {
+	//	return xerrors.Errorf("not a committed-capacity sector, expected 1 piece")
+	//}
+	//
+	//if si.Pieces[0].DealInfo != nil {
+	//	return xerrors.Errorf("not a committed-capacity sector, has deals")
+	//}
 
 	// TODO: more checks to match actor constraints
 
